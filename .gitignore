@@ -13,3 +13,4 @@ tsconfig.tsbuildinfo
 .mongo-memory
 apps/api/uploads/
 apps/api/uploads-test/
+.report-venv/
