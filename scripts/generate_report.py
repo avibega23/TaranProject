@@ -11,19 +11,31 @@ from reportlab.lib.units import inch, mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
-OUT = Path(__file__).resolve().parents[1] / "deliverables" / "FindIt_Project_Report.pdf"
+DELIVERABLES = Path(__file__).resolve().parents[1] / "deliverables"
 W, H = letter  # 612 x 792 pts — matches demoreport.pdf
 
-STUDENTS = [
+ALL_STUDENTS = [
     ("Taran Singh", "12401067"),
     ("Prince", "12401062"),
 ]
+# Active student(s) for the report currently being generated (set per run).
+STUDENTS: list[tuple[str, str]] = list(ALL_STUDENTS)
 MENTOR = "Dr. Harpreet Kaur"
 PROJECT = "FindIt"
 PROJECT_FULL = "FindIt — Smart Campus Lost & Found"
 COURSE = "WEB DEVELOPMENT / FULL STACK"
 DEPT = "DEPARTMENT OF COMPUTER SCIENCE & ENGINEERING"
 UNIV = "PUNJABI UNIVERSITY, PATIALA - 147002"
+
+
+def _slug(name: str) -> str:
+    return name.replace(" ", "_")
+
+
+def _out_path(students: list[tuple[str, str]]) -> Path:
+    if len(students) == 1:
+        return DELIVERABLES / f"FindIt_Project_Report_{_slug(students[0][0])}.pdf"
+    return DELIVERABLES / "FindIt_Project_Report.pdf"
 
 MARGIN_L = 1.0 * inch
 MARGIN_R = 1.0 * inch
@@ -38,11 +50,11 @@ LINE = HexColor("#666666")
 
 class Doc:
     def __init__(self, path: Path | None = None) -> None:
-        OUT.parent.mkdir(parents=True, exist_ok=True)
-        target = path or OUT
+        DELIVERABLES.mkdir(parents=True, exist_ok=True)
+        target = path or _out_path(STUDENTS)
         self.c = canvas.Canvas(str(target), pagesize=letter)
         self.c.setTitle("Minor Project Report - FindIt")
-        self.c.setAuthor("Taran Singh, Prince")
+        self.c.setAuthor(", ".join(name for name, _ in STUDENTS))
         self.page = 0
         self.y = H - MARGIN_T
         self.mode = "front"  # front | body
@@ -345,12 +357,13 @@ class Doc:
         self.c.save()
 
 
-def _build_with_merge() -> None:
+def _build_with_merge(out: Path | None = None) -> Path:
     import subprocess
-    import tempfile
 
-    body_path = OUT.parent / "_findit_body.pdf"
-    front_path = OUT.parent / "_findit_front.pdf"
+    target = out or _out_path(STUDENTS)
+    suffix = _slug(STUDENTS[0][0]) if len(STUDENTS) == 1 else "collective"
+    body_path = DELIVERABLES / f"_findit_body_{suffix}.pdf"
+    front_path = DELIVERABLES / f"_findit_front_{suffix}.pdf"
 
     body = Doc(body_path)
     _write_body(body)
@@ -374,7 +387,7 @@ def _build_with_merge() -> None:
             r = PdfReader(str(path))
             for p in r.pages:
                 w.add_page(p)
-        with open(OUT, "wb") as f:
+        with open(target, "wb") as f:
             w.write(f)
         merged = True
     except Exception:
@@ -395,19 +408,20 @@ def _build_with_merge() -> None:
                 r = PdfReader(str(path))
                 for p in r.pages:
                     w.add_page(p)
-            with open(OUT, "wb") as f:
+            with open(target, "wb") as f:
                 w.write(f)
             merged = True
         except Exception as e:
             # fallback: copy body only and warn
             import shutil
-            shutil.copy(body_path, OUT)
+            shutil.copy(body_path, target)
             print("WARN: could not merge front matter:", e)
 
     for p in (body_path, front_path):
         if p.exists():
             p.unlink()
-    print(f"Wrote {OUT}")
+    print(f"Wrote {target}")
+    return target
 
 
 def _write_front(d: Doc, body_page_count: int) -> None:
@@ -466,29 +480,52 @@ def _write_front(d: Doc, body_page_count: int) -> None:
     d.y -= 16
     d.c.drawCentredString(W / 2, d.y, UNIV)
 
+    single = len(STUDENTS) == 1
+
     # ACK
     d.new_page(front=True)
     d.set_front_label("ii")
     d.heading_centered("ACKNOWLEDGEMENT", 14)
-    d.para(
-        "We would like to express our sincere gratitude to everyone who supported us throughout the "
-        "completion of this minor project. Their guidance, technical insight, and continuous "
-        "encouragement were instrumental in helping us design, implement, and document a complete "
-        "full-stack web application from first requirements through a working campus demonstration."
-    )
-    d.para(
-        f"We are deeply thankful to our project mentor, {MENTOR}, and to the faculty of the "
-        "Department of Computer Science & Engineering, Punjabi University, Patiala, for invaluable "
-        "feedback that helped us refine the product scope, the layered API design, the explainable "
-        "matching heuristic, and the claim-moderation workflow. Their expertise was crucial in "
-        "helping us overcome challenges related to authentication, data modelling, and local deployment."
-    )
-    d.para(
-        "Finally, we thank our peers and families for unwavering support and motivation during "
-        "development. This project has been a significant learning milestone in modern web "
-        "development, and we are grateful for the opportunity to practise the full path from "
-        "problem statement to a usable Next.js and Express application backed by MongoDB."
-    )
+    if single:
+        d.para(
+            "I would like to express my sincere gratitude to everyone who supported me throughout the "
+            "completion of this minor project. Their guidance, technical insight, and continuous "
+            "encouragement were instrumental in helping me design, implement, and document a complete "
+            "full-stack web application from first requirements through a working campus demonstration."
+        )
+        d.para(
+            f"I am deeply thankful to my project mentor, {MENTOR}, and to the faculty of the "
+            "Department of Computer Science & Engineering, Punjabi University, Patiala, for invaluable "
+            "feedback that helped me refine the product scope, the layered API design, the explainable "
+            "matching heuristic, and the claim-moderation workflow. Their expertise was crucial in "
+            "helping me overcome challenges related to authentication, data modelling, and local deployment."
+        )
+        d.para(
+            "Finally, I thank my peers and family for unwavering support and motivation during "
+            "development. This project has been a significant learning milestone in modern web "
+            "development, and I am grateful for the opportunity to practise the full path from "
+            "problem statement to a usable Next.js and Express application backed by MongoDB."
+        )
+    else:
+        d.para(
+            "We would like to express our sincere gratitude to everyone who supported us throughout the "
+            "completion of this minor project. Their guidance, technical insight, and continuous "
+            "encouragement were instrumental in helping us design, implement, and document a complete "
+            "full-stack web application from first requirements through a working campus demonstration."
+        )
+        d.para(
+            f"We are deeply thankful to our project mentor, {MENTOR}, and to the faculty of the "
+            "Department of Computer Science & Engineering, Punjabi University, Patiala, for invaluable "
+            "feedback that helped us refine the product scope, the layered API design, the explainable "
+            "matching heuristic, and the claim-moderation workflow. Their expertise was crucial in "
+            "helping us overcome challenges related to authentication, data modelling, and local deployment."
+        )
+        d.para(
+            "Finally, we thank our peers and families for unwavering support and motivation during "
+            "development. This project has been a significant learning milestone in modern web "
+            "development, and we are grateful for the opportunity to practise the full path from "
+            "problem statement to a usable Next.js and Express application backed by MongoDB."
+        )
     d.para("Thank you all for your support.")
     d.y -= 30
     for name, roll in STUDENTS:
@@ -538,19 +575,34 @@ def _write_front(d: Doc, body_page_count: int) -> None:
     d.new_page(front=True)
     d.set_front_label("iv")
     d.heading_centered("CANDIDATE'S DECLARATION", 14)
-    d.para(
-        f'We, "TARAN SINGH" (Roll No. 12401067) and "PRINCE" (Roll No. 12401062), hereby declare '
-        f'that we have undertaken this Minor Project on "FindIt — Smart Campus Lost & Found" in '
-        "partial fulfillment of the requirements for the award of the degree of B.Tech (Department "
-        f"of Computer Science & Engineering). The work presented in this project report is an "
-        f"authentic record of our own work carried out under the guidance of {MENTOR}. We sincerely "
-        "thank our mentor for valuable guidance, support, and encouragement throughout the project."
-    )
-    d.y -= 20
-    d.para("Signature of the Students", font="Times-Bold", size=11, align="left", space_after=40)
-    d.c.setFont("Times-Roman", 11)
-    d.c.drawString(MARGIN_L, d.y, "Taran Singh ________________")
-    d.c.drawString(MARGIN_L + 260, d.y, "Prince ________________")
+    if single:
+        name, roll = STUDENTS[0]
+        d.para(
+            f'I, "{name.upper()}" (Roll No. {roll}), hereby declare '
+            f'that I have undertaken this Minor Project on "FindIt — Smart Campus Lost & Found" in '
+            "partial fulfillment of the requirements for the award of the degree of B.Tech (Department "
+            f"of Computer Science & Engineering). The work presented in this project report is an "
+            f"authentic record of my own work carried out under the guidance of {MENTOR}. I sincerely "
+            "thank my mentor for valuable guidance, support, and encouragement throughout the project."
+        )
+        d.y -= 20
+        d.para("Signature of the Student", font="Times-Bold", size=11, align="left", space_after=40)
+        d.c.setFont("Times-Roman", 11)
+        d.c.drawString(MARGIN_L, d.y, f"{name} ________________")
+    else:
+        d.para(
+            f'We, "TARAN SINGH" (Roll No. 12401067) and "PRINCE" (Roll No. 12401062), hereby declare '
+            f'that we have undertaken this Minor Project on "FindIt — Smart Campus Lost & Found" in '
+            "partial fulfillment of the requirements for the award of the degree of B.Tech (Department "
+            f"of Computer Science & Engineering). The work presented in this project report is an "
+            f"authentic record of our own work carried out under the guidance of {MENTOR}. We sincerely "
+            "thank our mentor for valuable guidance, support, and encouragement throughout the project."
+        )
+        d.y -= 20
+        d.para("Signature of the Students", font="Times-Bold", size=11, align="left", space_after=40)
+        d.c.setFont("Times-Roman", 11)
+        d.c.drawString(MARGIN_L, d.y, "Taran Singh ________________")
+        d.c.drawString(MARGIN_L + 260, d.y, "Prince ________________")
     d.y -= 40
     d.para(
         "The minor project Viva-Voce Examination has been held on ___________________ and accepted.",
@@ -1553,8 +1605,12 @@ def _write_body(d: Doc) -> None:
 
 
 def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    _build_with_merge()
+    global STUDENTS
+    DELIVERABLES.mkdir(parents=True, exist_ok=True)
+    # Generate one individual report per student (same body, personalised front matter).
+    for student in ALL_STUDENTS:
+        STUDENTS = [student]
+        _build_with_merge()
 
 
 if __name__ == "__main__":
